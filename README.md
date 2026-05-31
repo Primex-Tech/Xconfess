@@ -108,6 +108,8 @@ This starts the backend and frontend concurrently. Once both are ready:
 | Postgres | localhost:55432 |
 | Redis | localhost:6379 |
 
+See [Health Endpoint Quick Reference](docs/HEALTH_ENDPOINT_QUICK_REFERENCE.md) for details on liveness vs readiness probes, Kubernetes config examples, and response formats.
+
 ### Running individual services
 
 ```bash
