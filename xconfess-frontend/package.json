@@ -69,7 +69,6 @@
     "jest-axe": "^9.0.0",
     "jest-environment-jsdom": "^30.3.0",
     "jsdom": "26.1.0",
-    "lightningcss-win32-x64-msvc": "^1.30.2",
     "msw": "^2.12.10",
     "prettier": "^3.8.0",
     "prettier-plugin-tailwindcss": "^0.7.2",
@@ -77,5 +76,10 @@
     "ts-jest": "^29.4.6",
     "typescript": "^5",
     "whatwg-fetch": "^3.6.20"
+  },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "^1.30.2",
+    "lightningcss-win32-x64-msvc": "^1.30.2"
   }
 }
+
