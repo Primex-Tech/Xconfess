@@ -216,7 +216,7 @@ export class StellarService {
   /**
    * Verify a transaction exists on the Stellar network
    */
-  async verifyTransaction(txHash: string): Promise<boolean> {
+  async verifyTransaction(txHash: string, requestId?: string): Promise<boolean> {
     if (!this.isValidTxHash(txHash)) {
       return false;
     }
@@ -231,7 +231,11 @@ export class StellarService {
       return data.successful === true;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error verifying Stellar transaction: ${message}`);
+      this.logger.error({
+        message: `Error verifying Stellar transaction: ${message}`,
+        requestId,
+        txHash,
+      });
       return false;
     }
   }

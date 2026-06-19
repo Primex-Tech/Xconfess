@@ -4,9 +4,11 @@ import {
   Post,
   Body,
   Param,
+  Req,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -97,7 +99,9 @@ export class TippingController {
   async verifyTip(
     @Param('id') confessionId: string,
     @Body() dto: VerifyTipDto,
+    @Req() req: Request,
   ): Promise<TipVerificationResult> {
-    return this.tippingService.verifyAndRecordTip(confessionId, dto);
+    const requestId = (req as any).requestId as string | undefined;
+    return this.tippingService.verifyAndRecordTip(confessionId, dto, requestId);
   }
 }

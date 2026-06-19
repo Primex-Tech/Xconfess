@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Req,
@@ -30,6 +31,8 @@ import {
 @ApiTags('Stellar')
 @Controller('stellar')
 export class StellarController {
+  private readonly logger = new Logger(StellarController.name);
+
   constructor(
     private stellarService: StellarService,
     private contractService: ContractService,
@@ -69,12 +72,25 @@ export class StellarController {
       },
     },
   })
-  async verifyAnchor(@Param('confessionHash') confessionHash: string) {
+  async verifyAnchor(@Param('confessionHash') confessionHash: string, @Req() req: any) {
+    const requestId = req.requestId as string | undefined;
+    this.logger.log({
+      message: 'Anchor verify started',
+      requestId,
+      confessionHash,
+    });
+
     if (!/^[0-9a-fA-F]{64}$/.test(confessionHash)) {
       throw new BadRequestException('Invalid confession hash format. Expected 32-byte hex.');
     }
 
     const timestamp = await this.contractService.verifyConfession(confessionHash);
+    this.logger.log({
+      message: 'Anchor verify completed',
+      requestId,
+      confessionHash,
+      isAnchored: timestamp !== null,
+    });
     return {
       isAnchored: timestamp !== null,
       timestamp,
@@ -91,8 +107,10 @@ export class StellarController {
   @Post('verify')
   @ApiOperation({ summary: 'Verify transaction on-chain' })
   @ApiResponse({ status: 200, description: 'Transaction verification result' })
-  async verifyTransaction(@Body() dto: VerifyTransactionDto) {
-    return this.stellarService.verifyTransaction(dto.txHash);
+  async verifyTransaction(@Body() dto: VerifyTransactionDto, @Req() req: any) {
+    const requestId = req.requestId as string | undefined;
+    this.logger.log({ message: 'Stellar tx verify started', requestId, txHash: dto.txHash });
+    return this.stellarService.verifyTransaction(dto.txHash, requestId);
   }
 
   @Get('account-exists/:address')
