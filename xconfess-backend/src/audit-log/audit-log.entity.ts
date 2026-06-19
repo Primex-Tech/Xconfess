@@ -59,6 +59,8 @@ export enum AuditActionType {
   EXPORT_GENERATION_COMPLETED = 'export_generation_completed',
   EXPORT_LINK_REFRESHED = 'export_link_refreshed',
   EXPORT_DOWNLOADED = 'export_downloaded',
+  EXPORT_TOKEN_EXPIRED = 'export_token_expired',   // <-- ADDED
+  EXPORT_EXPIRED = 'export_expired',               // <-- ADDED
 
   /** Privileged Stellar server-signed contract invocation */
   STELLAR_CONTRACT_INVOCATION = 'stellar_contract_invocation',
@@ -88,7 +90,6 @@ export class AuditLog {
   @Column({
     type: 'enum',
     enum: AuditActionType,
-    name: 'action',
   })
   action: AuditActionType;
 
