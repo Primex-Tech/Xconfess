@@ -40,7 +40,7 @@ import { EncryptionService } from 'src/encryption/encryption.service';
 import { ConfessionResponseDto } from './dto/confession-response.dto';
 import { StellarService } from '../stellar/stellar.service';
 import { AnchorConfessionDto } from '../stellar/dto/anchor-confession.dto';
-import { CacheService } from '../cache/cache.service';
+import { CacheService, CACHE_TTL } from '../cache/cache.service';
 import { TagService } from './tag.service';
 import { ConfessionTag } from './entities/confession-tag.entity';
 import { toWindowBoundaries, TrendingWindow } from 'src/types/analytics.types';
@@ -352,7 +352,7 @@ export class ConfessionService {
       limit,
     );
 
-    await this.cacheService.set(cacheKey, response, 300);
+    await this.cacheService.set(cacheKey, response, CACHE_TTL.CONFESSION_LIST);
 
     return response;
   }
@@ -586,6 +586,13 @@ export class ConfessionService {
   }
 
   async getConfessionByIdWithViewCount(id: string, req: Request) {
+    const singleCacheKey = this.cacheService.buildKey('confession', id);
+
+    const cached = await this.cacheService.get<any>(singleCacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const conf = await this.confessionRepo.findOne({
       where: { id, isDeleted: false, isHidden: false },
       relations: [
@@ -649,10 +656,12 @@ export class ConfessionService {
         }
         updated.message = decryptConfession(updated.message, this.aesKey);
       }
+      await this.cacheService.set(singleCacheKey, updated, CACHE_TTL.CONFESSION_SINGLE);
       return updated;
     }
 
     conf.message = decryptConfession(conf.message, this.aesKey);
+    await this.cacheService.set(singleCacheKey, conf, CACHE_TTL.CONFESSION_SINGLE);
     return conf;
   }
 
@@ -966,6 +975,10 @@ export class ConfessionService {
       throw error;
     }
 
+    await this.cacheService.del(
+      this.cacheService.buildKey('confession', id),
+    );
+
     const updated = await this.confessionRepo.findOne({ where: { id } });
     if (updated) {
       updated.message = decryptConfession(updated.message, this.aesKey);
@@ -1012,6 +1025,9 @@ export class ConfessionService {
       });
       confession.isAnchored = true;
       confession.anchoredAt = now;
+      await this.cacheService.del(
+        this.cacheService.buildKey('confession', id),
+      );
     }
 
     return {
@@ -1094,7 +1110,7 @@ export class ConfessionService {
       limit,
     );
 
-    await this.cacheService.set(cacheKey, result, 300);
+    await this.cacheService.set(cacheKey, result, CACHE_TTL.CONFESSION_LIST);
 
     return result;
   }
