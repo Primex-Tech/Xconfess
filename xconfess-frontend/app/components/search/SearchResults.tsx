@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { SearchResultItem } from "./SearchResultItem";
 import type { SearchConfession } from "@/app/lib/types/search";
 import { SkeletonCard } from "@/app/components/confession/LoadingSkeleton";
 import { cn } from "@/app/lib/utils/cn";
+import { Scale, ArrowRight, X } from "lucide-react";
 
 interface SearchResultsProps {
   results: SearchConfession[];
@@ -48,7 +51,28 @@ export function SearchResults({
   className,
   isRetrying = false,
 }: SearchResultsProps) {
+  const router = useRouter();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const suggestions = ["confession", "secret", "relationships"];
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
+      }
+      if (prev.length >= 2) {
+        // Enforce maximum allocation limit constraint of 2 confessions
+        return [prev[1], id];
+      }
+      return [...prev, id];
+    });
+  };
+
+  const navigateToComparison = () => {
+    if (selectedIds.length === 2) {
+      router.push(`/dashboard/compare?ids=${selectedIds.join(",")}`);
+    }
+  };
 
   if (isLoading && page === 1) {
     return (
@@ -152,7 +176,7 @@ export function SearchResults({
   const showCount = total != null && total > 0;
 
   return (
-    <div className={cn("space-y-4", className)} role="region" aria-label="Search results">
+    <div className={cn("space-y-4 relative pb-24", className)} role="region" aria-label="Search results">
       {statusMeta?.degraded && (
         <div
           className="rounded-[22px] border border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--foreground)]"
@@ -199,11 +223,66 @@ export function SearchResults({
 
       <ul className="list-none space-y-3" role="list">
         {results.map((c) => (
-          <li key={c.id} role="listitem">
-            <SearchResultItem confession={c} searchQuery={query} />
+          <li key={c.id} role="listitem" className="relative group flex items-start gap-3">
+            <div className="pt-5 pl-2 flex items-center justify-center shrink-0">
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(c.id)}
+                onChange={() => handleToggleSelect(c.id)}
+                className="h-4 w-4 rounded-md border-zinc-700 bg-zinc-900 text-amber-500 accent-amber-500 focus:ring-0 cursor-pointer"
+                title="Select confession for perspective comparison comparison"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <SearchResultItem confession={c} searchQuery={query} />
+            </div>
           </li>
         ))}
       </ul>
+
+      {/* Floating comparison context action bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-zinc-800 text-amber-400">
+              <Scale className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Compare Perspectives</p>
+              <p className="text-xs text-zinc-400">
+                {selectedIds.length === 1
+                  ? "Select 1 more confession to compare"
+                  : "2 confessions queued up for side-by-side view"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors rounded-lg hover:bg-zinc-800"
+              title="Clear selection checklist queue"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.length !== 2}
+              onClick={navigateToComparison}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 shadow-md",
+                selectedIds.length === 2
+                  ? "bg-amber-500 text-zinc-950 hover:bg-amber-400 cursor-pointer"
+                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50"
+              )}
+            >
+              <span>Compare</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {isLoading && page > 1 && (
         <div className="flex justify-center py-6" aria-hidden>

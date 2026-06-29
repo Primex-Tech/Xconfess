@@ -2,10 +2,13 @@
 
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useRouter } from "next/navigation";
+import { Scale, ArrowRight, X } from "lucide-react";
 import { ConfessionCard } from "./ConfessionCard";
 import { ConfessionFeedSkeleton } from "./LoadingSkeleton";
 import { useConfessionsQuery } from "../../lib/hooks/useConfessionsQuery";
 import { usePaginationState } from "../../lib/hooks/usePaginationState";
+import { useComparisonStore } from "../../lib/store/comparisonStore";
 import ErrorState from "../common/ErrorState";
 import {
   Pagination,
@@ -20,7 +23,11 @@ import {
 const ESTIMATED_CARD_HEIGHT = 300;
 
 export const ConfessionFeed = () => {
+  const router = useRouter();
   const { page, setPage, limit } = usePaginationState();
+
+  // Destructuring using your store's actual schema properties
+  const { selectedIds, clearItems } = useComparisonStore();
 
   const { data, isLoading, isFetching, error, refetch } = useConfessionsQuery({
     page,
@@ -56,9 +63,16 @@ export const ConfessionFeed = () => {
     });
   };
 
+  // Triggers comparison route logic context parsing using selectedIds
+  const handleNavigateToComparison = () => {
+    if (selectedIds.length > 0) {
+      router.push(`/dashboard/compare?ids=${selectedIds.join(",")}`);
+    }
+  };
+
   // Render pagination items
   const renderPaginationItems = () => {
-    const items = [];
+    const itemsList = [];
     const maxVisible = 5;
 
     let startPage = Math.max(1, page - 2);
@@ -69,18 +83,18 @@ export const ConfessionFeed = () => {
     }
 
     if (startPage > 1) {
-      items.push(
+      itemsList.push(
         <PaginationItem key="1">
           <PaginationLink onClick={() => setPage(1)}>1</PaginationLink>
         </PaginationItem>,
       );
       if (startPage > 2) {
-        items.push(<PaginationEllipsis key="ellipsis-start" />);
+        itemsList.push(<PaginationEllipsis key="ellipsis-start" />);
       }
     }
 
     for (let i = startPage; i <= endPage; i++) {
-      items.push(
+      itemsList.push(
         <PaginationItem key={i}>
           <PaginationLink isActive={i === page} onClick={() => setPage(i)}>
             {i}
@@ -91,9 +105,9 @@ export const ConfessionFeed = () => {
 
     if (endPage < totalPages) {
       if (endPage < totalPages - 1) {
-        items.push(<PaginationEllipsis key="ellipsis-end" />);
+        itemsList.push(<PaginationEllipsis key="ellipsis-end" />);
       }
-      items.push(
+      itemsList.push(
         <PaginationItem key={totalPages}>
           <PaginationLink onClick={() => setPage(totalPages)}>
             {totalPages}
@@ -102,11 +116,11 @@ export const ConfessionFeed = () => {
       );
     }
 
-    return items;
+    return itemsList;
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl py-2">
+    <div className="mx-auto w-full max-w-3xl py-2 relative">
       {/* Reserve vertical space to avoid layout shifts between states */}
       <div className="min-h-[320px] sm:min-h-[420px] md:min-h-[520px]">
         {/* Empty State */}
@@ -221,6 +235,48 @@ export const ConfessionFeed = () => {
           </Pagination>
           <div className="mt-4 text-center text-xs text-[var(--secondary)]">
             Page {page} of {totalPages}
+          </div>
+        </div>
+      )}
+
+      {/* Sticky Bottom Comparison Panel - Evaluated against selectedIds array */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-4 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-[var(--primary)] shrink-0">
+              <Scale className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-white">Metrics Inspector</p>
+              <p className="text-[11px] text-zinc-400">
+                {selectedIds.length === 1
+                  ? "Select one more to unlock side-by-side view"
+                  : `${selectedIds.length} confessions queued for metrics analysis`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={clearItems}
+              className="h-8 w-8 flex items-center justify-center text-zinc-500 hover:text-zinc-300 rounded-xl hover:bg-zinc-900 transition-colors cursor-pointer"
+              title="Clear selection queue"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.length < 2}
+              onClick={handleNavigateToComparison}
+              className={`h-8 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${selectedIds.length >= 2
+                  ? "bg-[var(--primary)] text-white hover:brightness-105 shadow-md"
+                  : "bg-zinc-900 text-zinc-600 border border-zinc-800/60 cursor-not-allowed opacity-60"
+                }`}
+            >
+              <span>Compare</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       )}
