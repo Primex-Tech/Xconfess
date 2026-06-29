@@ -1,87 +1,87 @@
-import {
+﻿import {
   Controller,
   Post,
   Body,
   Param,
   Delete,
   Get,
+  Patch,
   UseGuards,
   Req,
   Query,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiQuery,
-} from '@nestjs/swagger';
-import { CommentService } from './comment.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Request as ExpressRequest } from 'express';
-import { AnonymousUser } from '../user/entities/anonymous-user.entity';
+} from "@nestjs/common";
+import { CommentService } from "./comment.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Request as ExpressRequest } from "express";
+import { AnonymousUser } from "../user/entities/anonymous-user.entity";
+import { CreateCommentDto } from "./dto/create-comment.dto";
+import { EditCommentDto } from "./dto/edit-comment.dto";
+import { GetCommentsQueryDto } from "./dto/get-comments-query.dto";
 
-// Custom request type with user
 interface RequestWithUser extends ExpressRequest {
   user?: any;
 }
 
-@ApiTags('Comments')
-@Controller('comments')
+@Controller("confessions/:confessionId/comments")
 export class CommentController {
   constructor(private readonly service: CommentService) {}
 
+  /**
+   * POST /confessions/:confessionId/comments
+   * Create a new comment or reply (optional parentId for threading).
+   */
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Post(':confessionId')
-  @ApiOperation({ summary: 'Create a comment on a confession' })
-  @ApiParam({ name: 'confessionId', description: 'Confession UUID' })
-  @ApiResponse({ status: 201, description: 'Comment created successfully.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @Post()
   create(
-    @Param('confessionId') confessionId: string,
-    @Body('content') content: string,
+    @Param("confessionId") confessionId: string,
+    @Body() dto: CreateCommentDto,
     @Req() req: RequestWithUser,
-    @Body('anonymousContextId') anonymousContextId: string,
-    @Body('parentId') parentId?: number,
   ) {
     const user = req.user as AnonymousUser;
     return this.service.create(
-      content,
+      dto.content,
       user,
       confessionId,
-      anonymousContextId,
-      parentId,
+      dto.anonymousContextId,
+      dto.parentId,
     );
   }
 
-  @Get('by-confession/:confessionId')
-  @ApiOperation({ summary: 'List comments for a confession with cursor pagination' })
-  @ApiParam({ name: 'confessionId', description: 'Confession UUID' })
-  @ApiQuery({ name: 'cursor', required: false, description: 'Pagination cursor' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Items per page', example: 20 })
-  @ApiResponse({ status: 200, description: 'Paginated comments.' })
+  /**
+   * GET /confessions/:confessionId/comments
+   * Returns threaded comments (top-level with nested replies).
+   */
+  @Get()
   findByConfession(
-    @Param('confessionId') confessionId: string,
-    @Query('cursor') cursor?: string,
-    @Query('limit') limit?: string,
+    @Param("confessionId") confessionId: string,
+    @Query() query: GetCommentsQueryDto,
   ) {
-    const l = limit ? Number(limit) : undefined;
-    return this.service.findByConfessionId(confessionId, { cursor, limit: l });
+    return this.service.findByConfessionId(confessionId, query);
   }
 
+  /**
+   * PATCH /confessions/:confessionId/comments/:id
+   * Edit a comment within the 5-minute edit window.
+   */
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete a comment' })
-  @ApiParam({ name: 'id', description: 'Comment ID (numeric)' })
-  @ApiResponse({ status: 200, description: 'Comment deleted.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  @ApiResponse({ status: 404, description: 'Comment not found.' })
-  remove(@Param('id') id: string, @Req() req: RequestWithUser) {
+  @Patch(":id")
+  edit(
+    @Param("id") id: string,
+    @Body() dto: EditCommentDto,
+    @Req() req: RequestWithUser,
+  ) {
+    const user = req.user as AnonymousUser;
+    return this.service.edit(+id, dto.content, user);
+  }
+
+  /**
+   * DELETE /confessions/:confessionId/comments/:id
+   * Soft-delete a comment — content replaced with [deleted].
+   */
+  @UseGuards(JwtAuthGuard)
+  @Delete(":id")
+  remove(@Param("id") id: string, @Req() req: RequestWithUser) {
     const user = req.user as AnonymousUser;
     return this.service.delete(+id, user);
   }
-
 }

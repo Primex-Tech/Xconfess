@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -18,12 +18,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserAnonymousUser } from '../../user/entities/user-anonymous-link.entity';
 import { ConfigService } from '@nestjs/config';
 import { Tip } from '../../tipping/entities/tip.entity';
-import {
-  encodeCursor,
-  decodeCursor,
-  CursorPaginatedResponseDto,
-  PAGINATION,
-} from '../../common/pagination';
+import { AuditLogService } from '../../audit-log/audit-log.service';
+import { JobManagementService } from '../../notifications/services/job-management.service';
 
 export interface BulkResolveOutcome {
   id: string;
@@ -71,6 +67,7 @@ export class AdminService {
     private readonly moderationTemplateService: ModerationTemplateService,
     private readonly configService: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly auditLogService: AuditLogService,
     private readonly jobManagementService: JobManagementService,
   ) {}
 
@@ -439,6 +436,11 @@ export class AdminService {
   }
 
   // Users
+  
+  async unlockAccount(email: string): Promise<void> {
+    await this.lockoutService.clearLockout(email);
+    this.logger.log(Admin unlocked account: \);
+  }
   async banUser(
     userId: number,
     adminId: number,
@@ -927,3 +929,4 @@ export class AdminService {
     };
   }
 }
+
