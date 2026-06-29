@@ -9,8 +9,8 @@ import { SearchResults } from "@/app/components/search/SearchResults";
 import ErrorState from "@/app/components/common/ErrorState";
 import { useDebounce } from "@/app/lib/hooks/useDebounce";
 import { useSearch } from "@/app/lib/hooks/useSearch";
-import { useAuth } from "@/app/lib/hooks/useAuth"; // Added to handle authenticated saved searches
-import { Card } from "@/app/components/ui/card"; // Reusing your UI package system
+import { useAuth } from "@/app/lib/hooks/useAuth";
+import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { DEFAULT_FILTERS, type SearchFilters } from "@/app/lib/types/search";
 import type { FilterChipKey } from "@/app/components/search/FilterChips";
@@ -19,14 +19,15 @@ import {
   X,
   HelpCircle,
   Save,
-  HelpCircle as TooltipIcon,
+  History,
+  Bookmark,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils/cn";
 import { useFocusTrap } from "@/app/lib/hooks/useFocusTrap";
 
 const DEBOUNCE_MS = 300;
 
-// Example clickable query seeds requested by Wave 5 criteria
 const EXAMPLE_SUGGESTIONS = [
   "crypto",
   "stellar",
@@ -108,17 +109,24 @@ export default function SearchPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user } = useAuth(); // Hook validation for user persistence profile state
+  const { user } = useAuth();
 
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({ ...DEFAULT_FILTERS });
   const [isInitialized, setIsInitialized] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // States for Discovery History & Presets
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [presetItems, setPresetItems] = useState<any[]>([]);
+  const [showDiscoveryDropdown, setShowDiscoveryDropdown] = useState(false);
 
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const q = searchParams.get("q") || "";
@@ -159,15 +167,46 @@ export default function SearchPage() {
   const effectiveStatusMeta =
     error && results.length > 0
       ? {
-          partial: false,
-          degraded: true,
-          message: error,
-          warnings: [],
-          searchType: "error",
-        }
+        partial: false,
+        degraded: true,
+        message: error,
+        warnings: [],
+        searchType: "error",
+      }
       : statusMeta;
 
-  // Stable single-direction parameter synchronization wrapper
+  // Fetch search discovery history and custom filters
+  const fetchDiscoveryData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [historyRes, presetsRes] = await Promise.all([
+        fetch("/api/confessions/search/discovery/history"),
+        fetch("/api/confessions/search/discovery/presets"),
+      ]);
+      if (historyRes.ok) setHistoryItems(await historyRes.json());
+      if (presetsRes.ok) setPresetItems(await presetsRes.json());
+    } catch (err) {
+      console.error("Failed to load discovery criteria details:", err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchDiscoveryData();
+    }
+  }, [user, fetchDiscoveryData, searchParams]);
+
+  // Handle outside dropdown clicks
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDiscoveryDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const updateUrl = useCallback(
     (q: string, f: SearchFilters) => {
       const params = filtersToSearchParams(f, q);
@@ -184,6 +223,7 @@ export default function SearchPage() {
       const trimmed = q.trim();
       setQuery(trimmed);
       updateUrl(trimmed, filters);
+      setShowDiscoveryDropdown(false);
     },
     [filters, updateUrl],
   );
@@ -230,7 +270,7 @@ export default function SearchPage() {
         return;
       }
       if (key === "sort") {
-        const newFilters = { ...filters, sort: "newest" };
+        const newFilters = { ...filters, sort: "newest" as const };
         setFilters(newFilters);
         updateUrl(query, newFilters);
         return;
@@ -251,15 +291,74 @@ export default function SearchPage() {
     (suggestion: string) => {
       setQuery(suggestion);
       updateUrl(suggestion, filters);
+      setShowDiscoveryDropdown(false);
     },
     [filters, updateUrl],
   );
 
-  // Handle execution placeholder mock for saved tracking
-  const handleSaveSearch = () => {
-    if (!user) return;
-    setSaveStatus("Search query saved successfully!");
-    setTimeout(() => setSaveStatus(null), 4000);
+  const handleApplyPreset = useCallback((presetFilters: any) => {
+    // Assert and safe-guard that incoming literal union values match SearchFilters criteria
+    const incomingSort = ["newest", "oldest", "reactions"].includes(presetFilters?.sort)
+      ? (presetFilters.sort as SearchFilters["sort"])
+      : "newest";
+
+    const updated: SearchFilters = {
+      ...DEFAULT_FILTERS,
+      ...presetFilters,
+      sort: incomingSort
+    };
+
+    setFilters(updated);
+    updateUrl(query, updated);
+    setShowDiscoveryDropdown(false);
+  }, [query, updateUrl]);
+
+  const handleSaveSearch = async () => {
+    if (!user || !query.trim()) return;
+    setIsSaving(true);
+    try {
+      const presetName = prompt("Enter a nickname for this search setup:", `Search: ${query}`);
+      if (!presetName) {
+        setIsSaving(false);
+        return;
+      }
+
+      const response = await fetch("/api/confessions/search/discovery/presets", {
+        strategy: "POST",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: presetName,
+          filters: filters,
+        }),
+      } as any);
+
+      if (response.ok) {
+        setSaveStatus("Preset locked and saved successfully!");
+        fetchDiscoveryData();
+      } else {
+        setSaveStatus("Failed to save parameter configurations.");
+      }
+    } catch (err) {
+      setSaveStatus("Network transmission timeout.");
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
+
+  const handleDeletePreset = async (e: React.MouseEvent, presetId: string) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/confessions/search/discovery/presets/${presetId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        fetchDiscoveryData();
+      }
+    } catch (err) {
+      console.error("Error wiping preset configuration:", err);
+    }
   };
 
   useEffect(() => {
@@ -298,27 +397,24 @@ export default function SearchPage() {
             </p>
           </div>
 
-          {/* ========================================================= */}
-          {/* CRITERIA 2: SAVED SEARCH AFFORDANCE ZONE                    */}
-          {/* ========================================================= */}
           <div className="flex flex-col items-start md:items-end gap-1.5">
             <div className="relative group inline-flex items-center gap-2">
               <Button
                 type="button"
                 size="sm"
-                variant={user ? "default" : "outline"} //  "outline" matches your component rules
-                disabled={!user || !query.trim()}
+                variant={user ? "default" : "outline"}
+                disabled={!user || !query.trim() || isSaving}
+                onClick={handleSaveSearch}
                 className={cn(
                   "gap-2 transition-all duration-200",
                   !user &&
-                    "opacity-60 cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500",
+                  "opacity-60 cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500",
                 )}
               >
                 <Save className="h-4 w-4" />
-                Save Search
+                {isSaving ? "Saving..." : "Save Search"}
               </Button>
 
-              {/* Dynamic inline explanation wrapper showing contextual data when locked */}
               {!user && (
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs text-amber-500 max-w-xs">
                   <HelpCircle className="h-3.5 w-3.5 shrink-0" />
@@ -334,16 +430,74 @@ export default function SearchPage() {
           </div>
         </header>
 
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 min-w-0">
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 relative" ref={dropdownRef}>
+          <div className="flex-1 min-w-0 relative">
             <SearchInput
               value={query}
-              onChange={setQuery}
+              onChange={(val) => {
+                setQuery(val);
+                if (!showDiscoveryDropdown) setShowDiscoveryDropdown(true);
+              }}
               onSubmit={handleSubmit}
               placeholder="Search confessions..."
               aria-label="Search confessions"
+              onFocus={() => setShowDiscoveryDropdown(true)}
             />
+
+            {/* Interactive Search Discovery & History Dropdown Overlay */}
+            {showDiscoveryDropdown && user && (historyItems.length > 0 || presetItems.length > 0) && (
+              <Card className="absolute top-full left-0 right-0 z-50 mt-2 bg-zinc-900 border-zinc-800 shadow-2xl max-h-80 overflow-y-auto p-2 flex flex-col gap-3">
+                {presetItems.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-zinc-500 px-3 py-1 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Bookmark className="h-3.5 w-3.5 text-yellow-500" />
+                      Saved Search Presets
+                    </div>
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {presetItems.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => handleApplyPreset(p.filters)}
+                          className="flex items-center justify-between text-sm text-zinc-300 hover:bg-zinc-800/80 px-3 py-2 rounded-lg cursor-pointer transition-colors"
+                        >
+                          <span className="truncate font-medium text-zinc-200">{p.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeletePreset(e, p.id)}
+                            className="text-zinc-500 hover:text-red-400 p-1 rounded transition-colors"
+                            title="Delete configuration save slot"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {historyItems.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-zinc-500 px-3 py-1 flex items-center gap-1.5 uppercase tracking-wider">
+                      <History className="h-3.5 w-3.5 text-zinc-400" />
+                      Recent Searches
+                    </div>
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {historyItems.map((h) => (
+                        <div
+                          key={h.id}
+                          onClick={() => handleSuggestion(h.query)}
+                          className="text-sm text-zinc-400 hover:bg-zinc-800/80 hover:text-white px-3 py-2 rounded-lg cursor-pointer transition-colors truncate"
+                        >
+                          {h.query}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
+
           <button
             type="button"
             onClick={() => setSidebarOpen((o) => !o)}
@@ -438,9 +592,6 @@ export default function SearchPage() {
                   </div>
                 )}
 
-                {/* ========================================================= */}
-                {/* CRITERIA 1: EXPLICIT ACTIONABLE EMPTY RESULT FALLBACK       */}
-                {/* ========================================================= */}
                 {isEmpty && (
                   <Card className="p-6 md:p-8 text-center border border-zinc-800 bg-zinc-900/50 mb-6 max-w-2xl mx-auto">
                     <div className="mx-auto w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mb-4">
@@ -455,7 +606,6 @@ export default function SearchPage() {
                       running an example query suggestion.
                     </p>
 
-                    {/* Action Hub – Reset and interactive quick tokens */}
                     <div className="flex flex-col items-center justify-center gap-4">
                       {hasActiveFilterValues && (
                         <Button
