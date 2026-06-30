@@ -4,8 +4,7 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './services/admin.service';
 import { ModerationService } from './services/moderation.service';
 import { StellarDiagnosticsService } from './services/stellar-diagnostics.service';
-// import { Report } from 'src/report/report.entity'
-import { Report } from './entities/report.entity'
+import { Report } from './entities/report.entity';
 import { AuditLog } from '../audit-log/audit-log.entity';
 import { ModerationNoteTemplate } from '../comment/entities/moderation-note-template.entity';
 import { ModerationTemplateService } from '../comment/moderation-template.service';
@@ -24,6 +23,12 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StellarModule } from '../stellar/stellar.module';
 
+// New imports
+import { NotificationTemplate } from '../database/entities/notification-template.entity';
+import { TemplateVersion } from '../database/entities/template-version.entity';
+import { NotificationTemplatesController } from './controllers/notification-templates.controller';
+import { TemplatesService } from './services/templates.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -34,6 +39,8 @@ import { StellarModule } from '../stellar/stellar.module';
       User,
       UserAnonymousUser,
       Tip,
+      NotificationTemplate, // Added
+      TemplateVersion,      // Added
     ]),
     AuthModule,
     UserModule,
@@ -41,7 +48,10 @@ import { StellarModule } from '../stellar/stellar.module';
     NotificationsModule,
     StellarModule,
   ],
-  controllers: [AdminController],
+  controllers: [
+    AdminController,
+    NotificationTemplatesController, // Added
+  ],
   providers: [
     AdminService,
     ModerationService,
@@ -52,7 +62,13 @@ import { StellarModule } from '../stellar/stellar.module';
     WebSocketLogger,
     WsRolesGuard,
     Reflector,
+    TemplatesService, // Added
   ],
-  exports: [AdminService, ModerationService, ModerationTemplateService],
+  exports: [
+    AdminService, 
+    ModerationService, 
+    ModerationTemplateService, 
+    TemplatesService, // Added
+  ],
 })
 export class AdminModule {}
